@@ -7,7 +7,7 @@ import type { Trip, ItineraryItem } from '@/types/itinerary';
 import { getTripById, saveTrip, addItineraryItem, updateItineraryItem, deleteItineraryItem } from '@/lib/storage';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
-import TripForm from '@/components/trip-form';
+import TripForm, {type TripFormValues} from '@/components/trip-form';
 import ItineraryItemForm, { type ItineraryItemFormValues } from '@/components/itinerary-item-form';
 import ItineraryTimeline from '@/components/itinerary-timeline';
 import SummarizeButton from '@/components/summarize-button';
@@ -29,15 +29,32 @@ export default function TripDetailPage() {
   const [isItemFormOpen, setIsItemFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ItineraryItem | null>(null);
 
-  const fetchTrip = useCallback(() => {
-    if (tripId && typeof window !== 'undefined') { // Ensure window is defined for localStorage
-      const currentTrip = getTripById(tripId);
-      if (currentTrip) {
-        setTrip(currentTrip);
-      } else {
-        toast({ title: "Error", description: "Trip not found.", variant: "destructive" });
-        router.push('/'); 
+  const fetchTrip = useCallback(async () => {
+    if (!tripId) return;
+    setIsLoading(true);
+    try {
+       // Ensure this runs client-side and Firebase is configured
+      if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+        const currentTrip = await getTripById(tripId);
+        if (currentTrip) {
+          setTrip(currentTrip);
+        } else {
+          toast({ title: "Error", description: "Trip not found.", variant: "destructive" });
+          router.push('/'); 
+        }
+      } else if (typeof window !== 'undefined') {
+          toast({
+            title: "Configuration Needed",
+            description: "Firebase is not configured. Please set up your .env file.",
+            variant: "destructive",
+          });
+          router.push('/');
       }
+    } catch (error) {
+      console.error("Failed to fetch trip:", error);
+      toast({ title: "Error", description: "Could not load trip details.", variant: "destructive" });
+      router.push('/');
+    } finally {
       setIsLoading(false);
     }
   }, [tripId, router, toast]);
@@ -46,27 +63,28 @@ export default function TripDetailPage() {
     fetchTrip();
   }, [fetchTrip]);
 
-  const handleTripFormSubmit = (data: any) => { // data type from TripFormValues
+  const handleTripFormSubmit = async (data: TripFormValues) => {
     if (!trip) return;
     try {
       const updatedTripData = {
-        ...trip,
+        ...trip, // spread existing trip to keep items and id
         destination: data.destination,
         startDate: format(data.startDate, 'yyyy-MM-dd'),
         endDate: format(data.endDate, 'yyyy-MM-dd'),
         notes: data.notes,
         imageUrl: data.imageUrl || trip.imageUrl || `https://placehold.co/1200x400.png?text=${encodeURIComponent(data.destination)}`,
       };
-      saveTrip(updatedTripData);
-      fetchTrip(); 
+      await saveTrip(updatedTripData); // saveTrip now expects the full trip object potentially
+      await fetchTrip(); // Re-fetch to ensure data consistency
       setIsTripFormOpen(false);
       toast({ title: "Trip Updated", description: "Your trip details have been saved." });
     } catch (error) {
+      console.error("Failed to update trip:", error);
       toast({ title: "Error", description: "Could not update trip.", variant: "destructive" });
     }
   };
 
-  const handleItemFormSubmit = (data: ItineraryItemFormValues) => {
+  const handleItemFormSubmit = async (data: ItineraryItemFormValues) => {
     if (!trip) return;
     try {
       const itemToSave = {
@@ -75,16 +93,17 @@ export default function TripDetailPage() {
       };
 
       if (editingItem) {
-        updateItineraryItem(trip.id, { ...editingItem, ...itemToSave });
+        await updateItineraryItem(trip.id, { ...editingItem, ...itemToSave });
         toast({ title: "Item Updated", description: `${data.title} has been updated.` });
       } else {
-        addItineraryItem(trip.id, itemToSave as Omit<ItineraryItem, 'id'>);
+        await addItineraryItem(trip.id, itemToSave as Omit<ItineraryItem, 'id'>);
         toast({ title: "Item Added", description: `${data.title} has been added to your trip.` });
       }
-      fetchTrip();
+      await fetchTrip(); // Re-fetch to ensure data consistency
       setIsItemFormOpen(false);
       setEditingItem(null);
     } catch (error) {
+      console.error("Failed to save item:", error);
       toast({ title: "Error", description: "Could not save item.", variant: "destructive" });
     }
   };
@@ -94,39 +113,40 @@ export default function TripDetailPage() {
     setIsItemFormOpen(true);
   };
 
-  const handleDeleteItem = (itemId: string) => {
+  const handleDeleteItem = async (itemId: string) => {
     if (!trip) return;
     try {
-      deleteItineraryItem(trip.id, itemId);
-      fetchTrip();
+      await deleteItineraryItem(trip.id, itemId);
+      await fetchTrip(); // Re-fetch to ensure data consistency
       toast({ title: "Item Deleted", description: "The itinerary item has been removed." });
     } catch (error) {
+      console.error("Failed to delete item:", error);
       toast({ title: "Error", description: "Could not delete item.", variant: "destructive" });
     }
   };
 
-  if (isLoading || !trip) { // Show skeleton loader if trip is null as well
+  if (isLoading || !trip) {
     return (
        <div className="space-y-6">
-        <Skeleton className="h-10 w-32 mb-6" /> {/* Back button skeleton */}
+        <Skeleton className="h-10 w-32 mb-6" />
         <div className="animate-pulse">
-          <Skeleton className="h-60 md:h-80 w-full rounded-lg mb-8" /> {/* Image skeleton */}
+          <Skeleton className="h-60 md:h-80 w-full rounded-lg mb-8" />
           <div className="bg-card p-6 rounded-lg shadow-md mb-8">
             <div className="flex justify-between items-start mb-6">
-              <Skeleton className="h-8 w-1/2" /> {/* Trip Details title skeleton */}
+              <Skeleton className="h-8 w-1/2" />
               <div className="flex gap-2">
-                <Skeleton className="h-10 w-28" /> {/* Edit Trip button skeleton */}
-                <Skeleton className="h-10 w-36" /> {/* Summarize button skeleton */}
+                <Skeleton className="h-10 w-28" />
+                <Skeleton className="h-10 w-36" />
               </div>
             </div>
-            <Skeleton className="h-6 w-1/4 mb-2" /> {/* Notes title skeleton */}
-            <Skeleton className="h-16 w-full" /> {/* Notes content skeleton */}
+            <Skeleton className="h-6 w-1/4 mb-2" />
+            <Skeleton className="h-16 w-full" />
           </div>
         </div>
         <div>
           <div className="flex justify-between items-center mb-6">
-            <Skeleton className="h-8 w-1/3" /> {/* Itinerary title skeleton */}
-            <Skeleton className="h-10 w-32" /> {/* Add Item button skeleton */}
+            <Skeleton className="h-8 w-1/3" />
+            <Skeleton className="h-10 w-32" />
           </div>
           <div className="space-y-4">
             {[1,2].map(i => (
@@ -161,7 +181,7 @@ export default function TripDetailPage() {
             style={{objectFit:"cover"}}
             priority
             data-ai-hint="destination travel"
-            onError={(e) => (e.currentTarget.src = `https://placehold.co/1200x400.png?text=Error`)} // Fallback for broken image URLs
+            onError={(e) => (e.currentTarget.src = `https://placehold.co/1200x400.png?text=Error`)}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
         <div className="absolute bottom-0 left-0 p-6 md:p-8">
@@ -222,7 +242,7 @@ export default function TripDetailPage() {
           </DialogHeader>
           <ItineraryItemForm
             onSubmit={handleItemFormSubmit}
-            initialData={editingItem || undefined} // Pass undefined if no initialData
+            initialData={editingItem || undefined}
             submitButtonText={editingItem ? "Save Changes" : "Add Item"}
           />
           <DialogClose className="sr-only">Close</DialogClose>
@@ -231,5 +251,3 @@ export default function TripDetailPage() {
     </div>
   );
 }
-
-    

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -8,22 +9,57 @@ import type { Trip } from '@/types/itinerary';
 import { getAllTrips, deleteTrip as deleteTripFromStorage } from '@/lib/storage';
 import { PlusCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 
 export default function HomePage() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Ensure localStorage is accessed only on the client side
-    if (typeof window !== 'undefined') {
-      setTrips(getAllTrips());
-      setIsLoading(false);
+    const fetchTrips = async () => {
+      setIsLoading(true);
+      try {
+        const fetchedTrips = await getAllTrips();
+        setTrips(fetchedTrips);
+      } catch (error) {
+        console.error("Failed to fetch trips:", error);
+        toast({
+          title: "Error",
+          description: "Could not load trips. Please check your connection or Firebase setup.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    // Ensure this runs client-side and Firebase is configured
+     if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+        fetchTrips();
+    } else if (typeof window !== 'undefined') {
+        // Handle case where Firebase might not be configured yet
+        toast({
+          title: "Configuration Needed",
+          description: "Firebase is not configured. Please set up your .env file.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
     }
-  }, []);
+  }, [toast]);
 
-  const handleDeleteTrip = (tripId: string) => {
-    deleteTripFromStorage(tripId);
-    setTrips(prevTrips => prevTrips.filter(trip => trip.id !== tripId));
+  const handleDeleteTrip = async (tripId: string) => {
+    try {
+      await deleteTripFromStorage(tripId);
+      setTrips(prevTrips => prevTrips.filter(trip => trip.id !== tripId));
+      toast({ title: "Trip Deleted", description: "The trip has been removed." });
+    } catch (error) {
+      console.error("Failed to delete trip:", error);
+      toast({
+        title: "Error",
+        description: "Could not delete trip.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (isLoading) {

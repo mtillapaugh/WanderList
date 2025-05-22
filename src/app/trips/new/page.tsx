@@ -1,3 +1,4 @@
+
 "use client";
 
 import TripForm from "@/components/trip-form";
@@ -11,15 +12,17 @@ export default function NewTripPage() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const handleSubmit = (data: TripFormValues) => {
+  const handleSubmit = async (data: TripFormValues) => {
     try {
-      const newTrip = saveTrip({
+      const newTripData = {
         destination: data.destination,
         startDate: formatISO(data.startDate, { representation: 'date' }),
         endDate: formatISO(data.endDate, { representation: 'date' }),
         notes: data.notes,
         imageUrl: data.imageUrl || `https://placehold.co/600x400.png?text=${encodeURIComponent(data.destination)}`,
-      });
+        items: [] // Initialize with empty items array
+      };
+      const newTrip = await saveTrip(newTripData);
       toast({
         title: "Trip Created!",
         description: `Your trip to ${newTrip.destination} has been saved.`,
