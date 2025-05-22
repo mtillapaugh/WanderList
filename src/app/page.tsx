@@ -17,6 +17,10 @@ export default function HomePage() {
   const { toast } = useToast();
 
   useEffect(() => {
+    // Diagnostic log for Firebase env vars
+    console.log("DIAGNOSTIC: NEXT_PUBLIC_FIREBASE_API_KEY:", process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
+    console.log("DIAGNOSTIC: NEXT_PUBLIC_FIREBASE_PROJECT_ID:", process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
+
     const fetchTrips = async () => {
       setIsLoading(true);
       try {
@@ -34,7 +38,7 @@ export default function HomePage() {
       }
     };
     // Ensure this runs client-side and Firebase is configured
-     if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+     if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_FIREBASE_API_KEY && process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) {
         fetchTrips();
     } else if (typeof window !== 'undefined') {
         // Handle case where Firebase might not be configured yet
@@ -90,7 +94,7 @@ export default function HomePage() {
         </Link>
       </div>
 
-      {trips.length === 0 ? (
+      {trips.length === 0 && !isLoading ? ( // Ensure isLoading is false before showing empty state
         <div className="text-center py-12 border-2 border-dashed border-border rounded-lg">
           <svg className="mx-auto h-12 w-12 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
